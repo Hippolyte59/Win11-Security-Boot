@@ -137,13 +137,18 @@ Get-ChildItem "C:\logs\Win11SecurityBoot" |
 ### Mode performance anti-lag (FR)
 
 Le script detecte automatiquement la machine:
-- `Low`: en general <= 8 GB RAM ou <= 4 threads CPU.
-- `Balanced`: en general <= 16 GB RAM ou <= 8 threads CPU.
-- `High`: au-dela.
+- `Low` (cible 8 GB): RAM <= 8.5 GB, ou CPU <= 4 threads.
+- `Balanced` (cible 16 GB): RAM <= 16.5 GB, ou CPU <= 8 threads.
+- `High` (cible 32 GB+): RAM > 16.5 GB et CPU > 8 threads.
 
 Effets:
 - Cooldowns augmentes automatiquement sur profils modestes.
 - Taches lourdes (scan complet Defender, Windows Update, signatures) lancees avec priorite reduite.
+
+Exemple de comportement par classe:
+- `Low` (8 GB): signatures ~18h, Windows Update ~24h, full scan ~504h minimum.
+- `Balanced` (16 GB): signatures ~8h, Windows Update ~12h, full scan ~240h minimum.
+- `High` (32 GB+): signatures ~4h, Windows Update ~6h, full scan ~168h minimum.
 
 Si besoin, vous pouvez forcer un profil:
 
@@ -324,13 +329,18 @@ Get-ChildItem "C:\logs\Win11SecurityBoot" |
 ### Performance anti-lag mode (EN)
 
 The script auto-detects hardware:
-- `Low`: typically <= 8 GB RAM or <= 4 logical CPU threads.
-- `Balanced`: typically <= 16 GB RAM or <= 8 logical CPU threads.
-- `High`: above that.
+- `Low` (8 GB target): RAM <= 8.5 GB, or CPU <= 4 logical threads.
+- `Balanced` (16 GB target): RAM <= 16.5 GB, or CPU <= 8 logical threads.
+- `High` (32 GB+ target): RAM > 16.5 GB and CPU > 8 logical threads.
 
 Effects:
 - Cooldowns are increased automatically on lower-end profiles.
 - Heavy background tasks run with reduced priority.
+
+Typical class behavior:
+- `Low` (8 GB): signatures ~18h, Windows Update ~24h, full scan ~504h minimum.
+- `Balanced` (16 GB): signatures ~8h, Windows Update ~12h, full scan ~240h minimum.
+- `High` (32 GB+): signatures ~4h, Windows Update ~6h, full scan ~168h minimum.
 
 To force a profile manually:
 
