@@ -25,6 +25,7 @@ Language:
 - [Structure des fichiers](#structure-des-fichiers-fr)
 - [Installation](#installation-fr)
 - [Verification](#verification-fr)
+- [Mode performance anti-lag](#mode-performance-anti-lag-fr)
 - [Parametres avances](#parametres-avances-fr)
 - [Logs et notifications](#logs-et-notifications-fr)
 - [Desinstallation](#desinstallation-fr)
@@ -34,6 +35,7 @@ Language:
 
 Le projet execute un script de securisation au demarrage Windows via une tache planifiee.
 Le script applique des regles de hardening, genere un rapport de conformite, puis lance certaines taches lourdes en arriere-plan (Defender et Windows Update).
+Depuis cette version, le script adapte automatiquement ses cooldowns selon la RAM et le CPU pour limiter le lag au demarrage.
 
 ### Fonctionnalites (FR)
 
@@ -52,6 +54,8 @@ Le script applique des regles de hardening, genere un rapport de conformite, pui
 - Configuration Windows Update + declenchement asynchrone (avec cooldown).
 - Rapport de conformite par regle (OK/KO, before/after).
 - Notifications Windows differenciees selon la tache et le statut.
+- Profil performance automatique (Auto/Low/Balanced/High) selon RAM/CPU.
+- Priorite basse pour les taches lourdes en arriere-plan afin de limiter l'impact sur les machines modestes.
 
 ### Regles de conformite (FR)
 
@@ -81,10 +85,11 @@ Regles principales auditees:
 |-- win11-startup-security.ps1
 `-- README.md
 
+C:\logs\Win11SecurityBoot\
+|-- security-YYYY-MM-DD_HH-mm-ss.log
+`-- compliance-YYYY-MM-DD_HH-mm-ss.log
+
 C:\ProgramData\Win11SecurityBoot\
-|-- logs\
-|   |-- security-YYYY-MM-DD_HH-mm-ss.log
-|   `-- compliance-YYYY-MM-DD_HH-mm-ss.log
 `-- state\
     |-- defender-signature-update.txt
     |-- defender-full-scan.txt
@@ -124,9 +129,26 @@ Start-ScheduledTask -TaskName "Win11SecurityBoot"
 Consulter les derniers logs:
 
 ```powershell
-Get-ChildItem "C:\ProgramData\Win11SecurityBoot\logs" |
+Get-ChildItem "C:\logs\Win11SecurityBoot" |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 5
+```
+
+### Mode performance anti-lag (FR)
+
+Le script detecte automatiquement la machine:
+- `Low`: en general <= 8 GB RAM ou <= 4 threads CPU.
+- `Balanced`: en general <= 16 GB RAM ou <= 8 threads CPU.
+- `High`: au-dela.
+
+Effets:
+- Cooldowns augmentes automatiquement sur profils modestes.
+- Taches lourdes (scan complet Defender, Windows Update, signatures) lancees avec priorite reduite.
+
+Si besoin, vous pouvez forcer un profil:
+
+```powershell
+.\win11-startup-security.ps1 -PerformanceProfile Low
 ```
 
 ### Parametres avances (FR)
@@ -140,6 +162,7 @@ Le script principal accepte notamment:
 - `SignatureUpdateCooldownHours` (defaut: 6)
 - `WindowsUpdateTriggerCooldownHours` (defaut: 6)
 - `FullScanCooldownHours` (defaut: 168)
+- `PerformanceProfile` (`Auto`, `Low`, `Balanced`, `High`)
 
 Exemple:
 
@@ -158,6 +181,10 @@ Notifications:
 - Le message et l'icone changent selon la tache et le statut (success, skipped, warning, error).
 - En session non interactive (ex: execution SYSTEM sans bureau utilisateur), la notification peut ne pas s'afficher visuellement; la raison est journalisee.
 
+Chemins actuels:
+- Logs: `C:\logs\Win11SecurityBoot\`
+- Etat/cooldowns: `C:\ProgramData\Win11SecurityBoot\state\`
+
 ### Desinstallation (FR)
 
 ```bat
@@ -165,6 +192,7 @@ Notifications:
 ```
 
 Cette commande retire la tache planifiee uniquement. Les reglages deja appliques restent actifs.
+Le nouveau `uninstall.bat` supprime directement la tache sans verification prealable lente, ce qui reduit les blocages perçus.
 
 ### Notes (FR)
 
@@ -184,6 +212,7 @@ Cette commande retire la tache planifiee uniquement. Les reglages deja appliques
 - [File Layout](#file-layout-en)
 - [Installation](#installation-en)
 - [Verification](#verification-en)
+- [Performance anti-lag mode](#performance-anti-lag-mode-en)
 - [Advanced Parameters](#advanced-parameters-en)
 - [Logs and Notifications](#logs-and-notifications-en)
 - [Uninstall](#uninstall-en)
@@ -193,6 +222,7 @@ Cette commande retire la tache planifiee uniquement. Les reglages deja appliques
 
 This project runs a Windows hardening script at startup through Task Scheduler.
 It applies baseline security controls, writes compliance output, and launches heavy tasks asynchronously (Defender and Windows Update).
+This version also auto-tunes cooldowns from RAM/CPU so lower-end PCs get less startup lag.
 
 ### Features (EN)
 
@@ -211,6 +241,8 @@ It applies baseline security controls, writes compliance output, and launches he
 - Configures Windows Update policy and asynchronous trigger with cooldown.
 - Produces per-rule compliance logs (OK/KO, before/after).
 - Sends task-specific Windows notifications with different icons/messages.
+- Hardware-aware performance profile (Auto/Low/Balanced/High).
+- Low-priority background execution for heavy tasks to reduce UI stutter.
 
 ### Compliance Rules (EN)
 
@@ -240,10 +272,11 @@ Main audited rules:
 |-- win11-startup-security.ps1
 `-- README.md
 
+C:\logs\Win11SecurityBoot\
+|-- security-YYYY-MM-DD_HH-mm-ss.log
+`-- compliance-YYYY-MM-DD_HH-mm-ss.log
+
 C:\ProgramData\Win11SecurityBoot\
-|-- logs\
-|   |-- security-YYYY-MM-DD_HH-mm-ss.log
-|   `-- compliance-YYYY-MM-DD_HH-mm-ss.log
 `-- state\
     |-- defender-signature-update.txt
     |-- defender-full-scan.txt
@@ -283,9 +316,26 @@ Start-ScheduledTask -TaskName "Win11SecurityBoot"
 Read latest logs:
 
 ```powershell
-Get-ChildItem "C:\ProgramData\Win11SecurityBoot\logs" |
+Get-ChildItem "C:\logs\Win11SecurityBoot" |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 5
+```
+
+### Performance anti-lag mode (EN)
+
+The script auto-detects hardware:
+- `Low`: typically <= 8 GB RAM or <= 4 logical CPU threads.
+- `Balanced`: typically <= 16 GB RAM or <= 8 logical CPU threads.
+- `High`: above that.
+
+Effects:
+- Cooldowns are increased automatically on lower-end profiles.
+- Heavy background tasks run with reduced priority.
+
+To force a profile manually:
+
+```powershell
+.\win11-startup-security.ps1 -PerformanceProfile Low
 ```
 
 ### Advanced Parameters (EN)
@@ -299,6 +349,7 @@ Main script parameters include:
 - `SignatureUpdateCooldownHours`
 - `WindowsUpdateTriggerCooldownHours`
 - `FullScanCooldownHours`
+- `PerformanceProfile` (`Auto`, `Low`, `Balanced`, `High`)
 
 Example:
 
@@ -312,6 +363,10 @@ Generated files:
 - `security-*.log`: timestamped action log.
 - `compliance-*.log`: per-rule compliance output.
 
+Paths:
+- Logs: `C:\logs\Win11SecurityBoot\`
+- State/cooldowns: `C:\ProgramData\Win11SecurityBoot\state\`
+
 Notifications:
 - Distinct notifications are emitted for each major task.
 - Message and icon vary by task and status (success, skipped, warning, error).
@@ -324,6 +379,7 @@ Notifications:
 ```
 
 This only removes the scheduled task. Applied security settings remain on the machine.
+The updated `uninstall.bat` removes the task directly (no slow pre-query), which reduces perceived lag.
 
 ### Notes (EN)
 

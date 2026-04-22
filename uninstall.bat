@@ -1,27 +1,48 @@
 @echo off
 setlocal
 
+for /f %%e in ('echo prompt $E ^| cmd') do set "ESC=%%e"
+set "C_RESET=%ESC%[0m"
+set "C_INFO=%ESC%[96m"
+set "C_OK=%ESC%[92m"
+set "C_WARN=%ESC%[93m"
+set "C_ERR=%ESC%[91m"
+set "C_TITLE=%ESC%[95m"
+
+title Win11 Security Boot - Uninstall
+
+echo %C_TITLE%============================================================%C_RESET%
+echo %C_TITLE%   Win11 Security Boot - Suppression tache demarrage        %C_RESET%
+echo %C_TITLE%============================================================%C_RESET%
+echo %C_INFO%               ___  _  _  _  _   ___  ___                %C_RESET%
+echo %C_INFO%              / __|| || || || | / _ \| _ )               %C_RESET%
+echo %C_INFO%              \__ \| __ || __ || (_) | _ \               %C_RESET%
+echo %C_INFO%              |___/|_||_||_||_| \___/|___/               %C_RESET%
+echo.
+
 net session >nul 2>&1
 if not "%errorlevel%"=="0" (
-  echo Elevation administrateur requise...
+  echo %C_WARN%Elevation administrateur requise...%C_RESET%
   "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
   exit /b
 )
 
 set "TASK_NAME=Win11SecurityBoot"
 
-echo Suppression de la tache "%TASK_NAME%"...
-schtasks /Query /TN "%TASK_NAME%" >nul 2>&1
-if "%errorlevel%"=="0" (
-  schtasks /Delete /TN "%TASK_NAME%" /F >nul
-  if errorlevel 1 (
-    echo Echec de suppression de la tache "%TASK_NAME%".
-    exit /b 1
-  )
-  echo Tache "%TASK_NAME%" supprimee.
-) else (
-  echo Aucune tache "%TASK_NAME%" trouvee.
+choice /C YN /N /M "Supprimer la tache de demarrage maintenant ? [Y/N]: "
+if errorlevel 2 (
+  echo %C_WARN%Desinstallation annulee par l'utilisateur.%C_RESET%
+  exit /b 0
 )
 
-echo Desinstallation terminee.
+echo.
+echo %C_INFO%Suppression de la tache "%TASK_NAME%"...%C_RESET%
+schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>&1
+if errorlevel 1 (
+  echo %C_WARN%Aucune tache "%TASK_NAME%" trouvee (ou deja supprimee).%C_RESET%
+) else (
+  echo %C_OK%Tache "%TASK_NAME%" supprimee.%C_RESET%
+)
+
+echo %C_OK%Desinstallation terminee.%C_RESET%
 exit /b 0

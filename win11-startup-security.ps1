@@ -15,7 +15,9 @@ param(
     [ValidateRange(1, 24)]
     [int]$WindowsUpdateTriggerCooldownHours = 6,
     [ValidateRange(24, 720)]
-    [int]$FullScanCooldownHours = 168
+    [int]$FullScanCooldownHours = 168,
+    [ValidateSet("Auto", "Low", "Balanced", "High")]
+    [string]$PerformanceProfile = "Auto"
 )
 
 Set-StrictMode -Version Latest
@@ -32,10 +34,10 @@ if (-not (Test-Admin)) {
     exit 1
 }
 
-$baseDir = Join-Path $env:ProgramData "Win11SecurityBoot"
-$logDir = Join-Path $baseDir "logs"
-$stateFile = Join-Path $baseDir "last-run.txt"
-$stateDir = Join-Path $baseDir "state"
+$baseDir = "C:\logs\Win11SecurityBoot"
+$logDir = $baseDir
+$stateFile = Join-Path "$env:ProgramData\Win11SecurityBoot" "last-run.txt"
+$stateDir = Join-Path "$env:ProgramData\Win11SecurityBoot" "state"
 
 New-Item -Path $logDir -ItemType Directory -Force | Out-Null
 New-Item -Path $stateDir -ItemType Directory -Force | Out-Null
@@ -49,6 +51,92 @@ function Write-Log {
 
     $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
     $line | Tee-Object -FilePath $logFile -Append
+}
+
+function Get-HardwareProfile {
+    try {
+        $computer = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+        $processors = Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop
+
+        $memoryGb = [Math]::Round(([double]$computer.TotalPhysicalMemory / 1GB), 1)
+        $logicalCpu = [int](($processors | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum)
+
+        $tier = "High"
+        if (($memoryGb -le 8) -or ($logicalCpu -le 4)) {
+            $tier = "Low"
+        }
+        elseif (($memoryGb -le 16) -or ($logicalCpu -le 8)) {
+            $tier = "Balanced"
+        }
+
+        return [PSCustomObject]@{
+            MemoryGb = $memoryGb
+            LogicalCpu = $logicalCpu
+            Tier = $tier
+            Source = "CIM"
+        }
+    }
+    catch {
+        return [PSCustomObject]@{
+            MemoryGb = -1
+            LogicalCpu = -1
+            Tier = "Balanced"
+            Source = "Fallback"
+        }
+    }
+}
+
+function Resolve-PerformanceSettings {
+    param(
+        [string]$RequestedProfile,
+        [int]$RequestedCooldownHours,
+        [int]$RequestedSignatureUpdateCooldownHours,
+        [int]$RequestedWindowsUpdateTriggerCooldownHours,
+        [int]$RequestedFullScanCooldownHours
+    )
+
+    $hardware = Get-HardwareProfile
+    $resolvedProfile = $RequestedProfile
+    if ($RequestedProfile -eq "Auto") {
+        $resolvedProfile = $hardware.Tier
+    }
+
+    $effectiveCooldownHours = $RequestedCooldownHours
+    $effectiveSignatureUpdateCooldownHours = $RequestedSignatureUpdateCooldownHours
+    $effectiveWindowsUpdateTriggerCooldownHours = $RequestedWindowsUpdateTriggerCooldownHours
+    $effectiveFullScanCooldownHours = $RequestedFullScanCooldownHours
+    $backgroundPriority = "BelowNormal"
+
+    switch ($resolvedProfile) {
+        "Low" {
+            $effectiveCooldownHours = [Math]::Max($RequestedCooldownHours, 24)
+            $effectiveSignatureUpdateCooldownHours = [Math]::Max($RequestedSignatureUpdateCooldownHours, 12)
+            $effectiveWindowsUpdateTriggerCooldownHours = [Math]::Max($RequestedWindowsUpdateTriggerCooldownHours, 24)
+            $effectiveFullScanCooldownHours = [Math]::Max($RequestedFullScanCooldownHours, 336)
+            $backgroundPriority = "Idle"
+        }
+        "Balanced" {
+            $effectiveCooldownHours = [Math]::Max($RequestedCooldownHours, 12)
+            $effectiveSignatureUpdateCooldownHours = [Math]::Max($RequestedSignatureUpdateCooldownHours, 6)
+            $effectiveWindowsUpdateTriggerCooldownHours = [Math]::Max($RequestedWindowsUpdateTriggerCooldownHours, 12)
+            $effectiveFullScanCooldownHours = [Math]::Max($RequestedFullScanCooldownHours, 168)
+            $backgroundPriority = "BelowNormal"
+        }
+        default {
+            $backgroundPriority = "BelowNormal"
+        }
+    }
+
+    return [PSCustomObject]@{
+        Hardware = $hardware
+        RequestedProfile = $RequestedProfile
+        ResolvedProfile = $resolvedProfile
+        CooldownHours = $effectiveCooldownHours
+        SignatureUpdateCooldownHours = $effectiveSignatureUpdateCooldownHours
+        WindowsUpdateTriggerCooldownHours = $effectiveWindowsUpdateTriggerCooldownHours
+        FullScanCooldownHours = $effectiveFullScanCooldownHours
+        BackgroundPriority = $backgroundPriority
+    }
 }
 
 $script:NotificationSupported = $false
@@ -353,7 +441,11 @@ function Save-TaskRunState {
 }
 
 function Start-DetachedPowerShell {
-    param([string]$Command)
+    param(
+        [string]$Command,
+        [ValidateSet("Idle", "BelowNormal", "Normal")]
+        [string]$PriorityClass = "BelowNormal"
+    )
 
     $powerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
@@ -362,7 +454,7 @@ function Start-DetachedPowerShell {
         "-ExecutionPolicy", "Bypass",
         "-WindowStyle", "Hidden",
         "-Command", $Command
-    ) -WindowStyle Hidden | Out-Null
+    ) -WindowStyle Hidden -PriorityClass $PriorityClass | Out-Null
 }
 
 function Get-BuiltInGuestName {
@@ -435,10 +527,19 @@ function Write-ComplianceSummary {
 
 Initialize-NotificationSupport
 
-Write-Log "Demarrage du script de securisation."
+$performance = Resolve-PerformanceSettings -RequestedProfile $PerformanceProfile -RequestedCooldownHours $CooldownHours -RequestedSignatureUpdateCooldownHours $SignatureUpdateCooldownHours -RequestedWindowsUpdateTriggerCooldownHours $WindowsUpdateTriggerCooldownHours -RequestedFullScanCooldownHours $FullScanCooldownHours
+$effectiveCooldownHours = $performance.CooldownHours
+$effectiveSignatureUpdateCooldownHours = $performance.SignatureUpdateCooldownHours
+$effectiveWindowsUpdateTriggerCooldownHours = $performance.WindowsUpdateTriggerCooldownHours
+$effectiveFullScanCooldownHours = $performance.FullScanCooldownHours
+$backgroundTaskPriority = $performance.BackgroundPriority
 
-if (-not (Test-ShouldRun -Hours $CooldownHours)) {
-    Write-Log "Execution ignoree: cooldown actif de $CooldownHours h."
+Write-Log "Demarrage du script de securisation."
+Write-Log ("Profil performance: demande={0} resolu={1} RAM={2}GB CPU(logical)={3} source={4} priorite={5}" -f $performance.RequestedProfile, $performance.ResolvedProfile, $performance.Hardware.MemoryGb, $performance.Hardware.LogicalCpu, $performance.Hardware.Source, $backgroundTaskPriority)
+Write-Log ("Cooldowns effectifs: script={0}h signatures={1}h windows-update={2}h full-scan={3}h" -f $effectiveCooldownHours, $effectiveSignatureUpdateCooldownHours, $effectiveWindowsUpdateTriggerCooldownHours, $effectiveFullScanCooldownHours)
+
+if (-not (Test-ShouldRun -Hours $effectiveCooldownHours)) {
+    Write-Log "Execution ignoree: cooldown actif de $effectiveCooldownHours h."
     exit 0
 }
 
@@ -490,10 +591,10 @@ Invoke-ComplianceRule -Rule "Defender baseline" -Expected "Protections actives +
         ($value -match "Severe=(3|Remove)")
 }
 
-if (Test-TaskShouldRun -TaskName "defender-signature-update" -Hours $SignatureUpdateCooldownHours) {
+if (Test-TaskShouldRun -TaskName "defender-signature-update" -Hours $effectiveSignatureUpdateCooldownHours) {
     try {
         Write-Log "Lancement asynchrone de la mise a jour des signatures Defender."
-        Start-DetachedPowerShell -Command "Update-MpSignature | Out-Null"
+        Start-DetachedPowerShell -Command "Update-MpSignature | Out-Null" -PriorityClass $backgroundTaskPriority
         Save-TaskRunState -TaskName "defender-signature-update"
         Show-TaskNotification -TaskName "defender-signature-update" -Status "Success"
     }
@@ -503,14 +604,14 @@ if (Test-TaskShouldRun -TaskName "defender-signature-update" -Hours $SignatureUp
     }
 }
 else {
-    Write-Log "Update signatures ignoree (cooldown actif ${SignatureUpdateCooldownHours}h)."
-    Show-TaskNotification -TaskName "defender-signature-update" -Status "Skipped" -Details "Cooldown actif (${SignatureUpdateCooldownHours}h)."
+    Write-Log "Update signatures ignoree (cooldown actif ${effectiveSignatureUpdateCooldownHours}h)."
+    Show-TaskNotification -TaskName "defender-signature-update" -Status "Skipped" -Details "Cooldown actif (${effectiveSignatureUpdateCooldownHours}h)."
 }
 
-if (Test-TaskShouldRun -TaskName "defender-full-scan" -Hours $FullScanCooldownHours) {
+if (Test-TaskShouldRun -TaskName "defender-full-scan" -Hours $effectiveFullScanCooldownHours) {
     try {
         Write-Log "Lancement asynchrone du scan complet Defender (sans blocage du demarrage)."
-        Start-DetachedPowerShell -Command "Start-MpScan -ScanType FullScan"
+        Start-DetachedPowerShell -Command "Start-MpScan -ScanType FullScan" -PriorityClass $backgroundTaskPriority
         Save-TaskRunState -TaskName "defender-full-scan"
         Show-TaskNotification -TaskName "defender-full-scan" -Status "Success"
     }
@@ -520,8 +621,8 @@ if (Test-TaskShouldRun -TaskName "defender-full-scan" -Hours $FullScanCooldownHo
     }
 }
 else {
-    Write-Log "Scan complet ignore (cooldown actif ${FullScanCooldownHours}h)."
-    Show-TaskNotification -TaskName "defender-full-scan" -Status "Skipped" -Details "Cooldown actif (${FullScanCooldownHours}h)."
+    Write-Log "Scan complet ignore (cooldown actif ${effectiveFullScanCooldownHours}h)."
+    Show-TaskNotification -TaskName "defender-full-scan" -Status "Skipped" -Details "Cooldown actif (${effectiveFullScanCooldownHours}h)."
 }
 
 Write-Log "Desactivation SMBv1 cote serveur (durcissement reseau)."
@@ -655,13 +756,13 @@ Invoke-ComplianceRule -Rule "Windows Update policy" -Expected "AUOptions=4;Sched
         ($value -match "NoAutoRebootWithLoggedOnUsers=1")
 }
 
-if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $WindowsUpdateTriggerCooldownHours) {
+if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $effectiveWindowsUpdateTriggerCooldownHours) {
     try {
         Write-Log "Lancement asynchrone Windows Update (scan/download/install)."
         $usoClientPath = Join-Path $env:SystemRoot "System32\UsoClient.exe"
         if (Test-Path $usoClientPath) {
             $wuCommand = "& '$usoClientPath' StartScan | Out-Null; & '$usoClientPath' StartDownload | Out-Null; & '$usoClientPath' StartInstall | Out-Null"
-            Start-DetachedPowerShell -Command $wuCommand
+            Start-DetachedPowerShell -Command $wuCommand -PriorityClass $backgroundTaskPriority
             Save-TaskRunState -TaskName "windows-update-trigger"
             Write-Log "Windows Update lance via UsoClient."
             Show-TaskNotification -TaskName "windows-update-trigger" -Status "Success"
@@ -677,8 +778,8 @@ if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $WindowsUpdateT
     }
 }
 else {
-    Write-Log "Windows Update immediate ignoree (cooldown actif ${WindowsUpdateTriggerCooldownHours}h)."
-    Show-TaskNotification -TaskName "windows-update-trigger" -Status "Skipped" -Details "Cooldown actif (${WindowsUpdateTriggerCooldownHours}h)."
+    Write-Log "Windows Update immediate ignoree (cooldown actif ${effectiveWindowsUpdateTriggerCooldownHours}h)."
+    Show-TaskNotification -TaskName "windows-update-trigger" -Status "Skipped" -Details "Cooldown actif (${effectiveWindowsUpdateTriggerCooldownHours}h)."
 }
 
 Write-ComplianceSummary
