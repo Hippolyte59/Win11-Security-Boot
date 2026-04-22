@@ -1,0 +1,14 @@
+# Logs generés à l'exécution (ne pas versionner)
+logs/
+state/
+
+# Fichiers temporaires Windows
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Fichiers temporaires editeurs
+*.swp
+*.swo
+*~
+.vscode/
