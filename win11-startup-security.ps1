@@ -61,7 +61,6 @@ function Get-HardwareProfile {
         $memoryGb = [Math]::Round(([double]$computer.TotalPhysicalMemory / 1GB), 1)
         $logicalCpu = [int](($processors | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum)
 
-        # Classe RAM explicite: 8 / 16 / 32+ GB, puis ajustement avec le CPU.
         $ramClass = "32GB+"
         $tier = "High"
 
@@ -74,7 +73,6 @@ function Get-HardwareProfile {
             $tier = "Balanced"
         }
 
-        # Garde-fou CPU: on baisse d'un niveau si le processeur est limite.
         if ($logicalCpu -le 4) {
             $tier = "Low"
         }
@@ -124,7 +122,6 @@ function Resolve-PerformanceSettings {
 
     switch ($resolvedProfile) {
         "Low" {
-            # Cible typique: 8GB / CPU faible.
             $effectiveCooldownHours = [Math]::Max($RequestedCooldownHours, 24)
             $effectiveSignatureUpdateCooldownHours = [Math]::Max($RequestedSignatureUpdateCooldownHours, 18)
             $effectiveWindowsUpdateTriggerCooldownHours = [Math]::Max($RequestedWindowsUpdateTriggerCooldownHours, 24)
@@ -132,7 +129,6 @@ function Resolve-PerformanceSettings {
             $backgroundPriority = "Idle"
         }
         "Balanced" {
-            # Cible typique: 16GB / CPU moyen.
             $effectiveCooldownHours = [Math]::Max($RequestedCooldownHours, 12)
             $effectiveSignatureUpdateCooldownHours = [Math]::Max($RequestedSignatureUpdateCooldownHours, 8)
             $effectiveWindowsUpdateTriggerCooldownHours = [Math]::Max($RequestedWindowsUpdateTriggerCooldownHours, 12)
@@ -140,7 +136,6 @@ function Resolve-PerformanceSettings {
             $backgroundPriority = "BelowNormal"
         }
         default {
-            # Cible typique: 32GB+ / CPU solide.
             $effectiveCooldownHours = [Math]::Max($RequestedCooldownHours, 8)
             $effectiveSignatureUpdateCooldownHours = [Math]::Max($RequestedSignatureUpdateCooldownHours, 4)
             $effectiveWindowsUpdateTriggerCooldownHours = [Math]::Max($RequestedWindowsUpdateTriggerCooldownHours, 6)
@@ -802,6 +797,71 @@ if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $effectiveWindo
 else {
     Write-Log "Windows Update immediate ignoree / Immediate Windows Update skipped (cooldown actif / active ${effectiveWindowsUpdateTriggerCooldownHours}h)."
     Show-TaskNotification -TaskName "windows-update-trigger" -Status "Skipped" -Details "Cooldown actif / active (${effectiveWindowsUpdateTriggerCooldownHours}h)."
+}
+
+Write-Log "Reduction collecte donnees Microsoft et contenus sponsorises / Reducing Microsoft data collection and sponsored content."
+Invoke-ComplianceRule -Rule "Telemetry policy" -Expected "AllowTelemetry=0;DoNotShowFeedbackNotifications=1" -GetValue {
+    $k = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -ErrorAction Stop
+    "AllowTelemetry=$($k.AllowTelemetry);DoNotShowFeedbackNotifications=$($k.DoNotShowFeedbackNotifications)"
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications" -Value 1
+} -IsCompliant {
+    param($value)
+    return ($value -match "AllowTelemetry=0") -and ($value -match "DoNotShowFeedbackNotifications=1")
+}
+
+Invoke-ComplianceRule -Rule "Advertising ID policy" -Expected "DisabledByGroupPolicy=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -ErrorAction Stop).DisabledByGroupPolicy
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Invoke-ComplianceRule -Rule "Cloud content policy" -Expected "DisableWindowsConsumerFeatures=1;DisableTailoredExperiencesWithDiagnosticData=1;DisableSoftLanding=1" -GetValue {
+    $k = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -ErrorAction Stop
+    "DisableWindowsConsumerFeatures=$($k.DisableWindowsConsumerFeatures);DisableTailoredExperiencesWithDiagnosticData=$($k.DisableTailoredExperiencesWithDiagnosticData);DisableSoftLanding=$($k.DisableSoftLanding)"
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsConsumerFeatures" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableTailoredExperiencesWithDiagnosticData" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableSoftLanding" -Value 1
+} -IsCompliant {
+    param($value)
+    return ($value -match "DisableWindowsConsumerFeatures=1") -and
+        ($value -match "DisableTailoredExperiencesWithDiagnosticData=1") -and
+        ($value -match "DisableSoftLanding=1")
+}
+
+Invoke-ComplianceRule -Rule "Activity history policy" -Expected "EnableActivityFeed=0;PublishUserActivities=0;UploadUserActivities=0" -GetValue {
+    $k = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -ErrorAction Stop
+    "EnableActivityFeed=$($k.EnableActivityFeed);PublishUserActivities=$($k.PublishUserActivities);UploadUserActivities=$($k.UploadUserActivities)"
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "EnableActivityFeed" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "PublishUserActivities" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Name "UploadUserActivities" -Value 0
+} -IsCompliant {
+    param($value)
+    return ($value -match "EnableActivityFeed=0") -and
+        ($value -match "PublishUserActivities=0") -and
+        ($value -match "UploadUserActivities=0")
+}
+
+Invoke-ComplianceRule -Rule "Web search privacy policy" -Expected "AllowCortana=0;DisableWebSearch=1;ConnectedSearchUseWeb=0;ConnectedSearchUseWebOverMeteredConnections=0" -GetValue {
+    $k = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -ErrorAction Stop
+    "AllowCortana=$($k.AllowCortana);DisableWebSearch=$($k.DisableWebSearch);ConnectedSearchUseWeb=$($k.ConnectedSearchUseWeb);ConnectedSearchUseWebOverMeteredConnections=$($k.ConnectedSearchUseWebOverMeteredConnections)"
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCortana" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "ConnectedSearchUseWeb" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "ConnectedSearchUseWebOverMeteredConnections" -Value 0
+} -IsCompliant {
+    param($value)
+    return ($value -match "AllowCortana=0") -and
+        ($value -match "DisableWebSearch=1") -and
+        ($value -match "ConnectedSearchUseWeb=0") -and
+        ($value -match "ConnectedSearchUseWebOverMeteredConnections=0")
 }
 
 Write-ComplianceSummary
