@@ -14,10 +14,8 @@ title Win11 Security Boot - Uninstall
 echo %C_TITLE%============================================================%C_RESET%
 echo %C_TITLE%   Win11 Security Boot - Suppression tache / Remove startup task %C_RESET%
 echo %C_TITLE%============================================================%C_RESET%
-echo %C_INFO%               ___  _  _  _  _   ___  ___                %C_RESET%
-echo %C_INFO%              / __|| || || || | / _ \| _ )               %C_RESET%
-echo %C_INFO%              \__ \| __ || __ || (_) | _ \               %C_RESET%
-echo %C_INFO%              |___/|_||_||_||_| \___/|___/               %C_RESET%
+echo %C_INFO%                    WIN11 SECURITY BOOT                    %C_RESET%
+echo %C_INFO%                 Startup Task Removal Tool                 %C_RESET%
 echo.
 
 net session >nul 2>&1
