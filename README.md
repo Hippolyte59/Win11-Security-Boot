@@ -5,7 +5,7 @@ Automatic Windows 11 hardening at startup with PowerShell, no external dependenc
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows/windows-11)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Startup Task](https://img.shields.io/badge/Startup-Task%20Scheduler-blue)](install-startup-task.ps1)
+[![Startup Task](https://img.shields.io/badge/Startup-Task%20Scheduler-blue)](start.bat)
 [![Defender](https://img.shields.io/badge/Security-Microsoft%20Defender-success)](win11-startup-security.ps1)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)](.)
 
@@ -76,9 +76,9 @@ Regles principales auditees:
 
 ```text
 .
+|-- start.bat
+|-- uninstall.bat
 |-- win11-startup-security.ps1
-|-- install-startup-task.ps1
-|-- uninstall-startup-task.ps1
 `-- README.md
 
 C:\ProgramData\Win11SecurityBoot\
@@ -100,12 +100,12 @@ Prerequis:
 
 Commandes:
 
-```powershell
+```bat
 cd "D:\Win11 Security Boot"
-.\install-startup-task.ps1
+.\start.bat
 ```
 
-La tache `Win11SecurityBoot` est enregistree pour un lancement au demarrage en compte SYSTEM.
+`start.bat` demande les droits admin si necessaire, cree la tache `Win11SecurityBoot`, puis lance immediatement le script de securisation.
 
 ### Verification (FR)
 
@@ -160,8 +160,8 @@ Notifications:
 
 ### Desinstallation (FR)
 
-```powershell
-.\uninstall-startup-task.ps1
+```bat
+.\uninstall.bat
 ```
 
 Cette commande retire la tache planifiee uniquement. Les reglages deja appliques restent actifs.
@@ -235,9 +235,9 @@ Main audited rules:
 
 ```text
 .
+|-- start.bat
+|-- uninstall.bat
 |-- win11-startup-security.ps1
-|-- install-startup-task.ps1
-|-- uninstall-startup-task.ps1
 `-- README.md
 
 C:\ProgramData\Win11SecurityBoot\
@@ -259,12 +259,12 @@ Requirements:
 
 Commands:
 
-```powershell
+```bat
 cd "D:\Win11 Security Boot"
-.\install-startup-task.ps1
+.\start.bat
 ```
 
-This registers the `Win11SecurityBoot` startup task under SYSTEM.
+`start.bat` requests elevation when needed, creates the `Win11SecurityBoot` startup task, then immediately runs the hardening script.
 
 ### Verification (EN)
 
@@ -319,8 +319,8 @@ Notifications:
 
 ### Uninstall (EN)
 
-```powershell
-.\uninstall-startup-task.ps1
+```bat
+.\uninstall.bat
 ```
 
 This only removes the scheduled task. Applied security settings remain on the machine.
