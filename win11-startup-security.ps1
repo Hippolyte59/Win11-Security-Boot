@@ -575,20 +575,22 @@ Invoke-ComplianceRule -Rule "Defender baseline" -Expected "Protections actives +
     Set-MpPreference -SevereThreatDefaultAction Remove
 } -IsCompliant {
     param($value)
-    return ($value -match "RTM=True") -and
-        ($value -match "IOAV=True") -and
-        ($value -match "Script=True") -and
-        ($value -match "Archive=True") -and
-        ($value -match "Email=True") -and
-        ($value -match "USB=True") -and
-        ($value -match "PUA=(1|Enabled)") -and
-        ($value -match "MAPS=(2|Advanced)") -and
-        ($value -match "Samples=(1|SendSafeSamples)") -and
-        ($value -match "NP=(1|Enabled)") -and
-        ($value -match "Low=(2|Quarantine)") -and
-        ($value -match "Moderate=(2|Quarantine)") -and
-        ($value -match "High=(3|Remove)") -and
+    return @(
+        ($value -match "RTM=True"),
+        ($value -match "IOAV=True"),
+        ($value -match "Script=True"),
+        ($value -match "Archive=True"),
+        ($value -match "Email=True"),
+        ($value -match "USB=True"),
+        ($value -match "PUA=(1|Enabled)"),
+        ($value -match "MAPS=(2|Advanced)"),
+        ($value -match "Samples=(1|SendSafeSamples)"),
+        ($value -match "NP=(1|Enabled)"),
+        ($value -match "Low=(2|Quarantine)"),
+        ($value -match "Moderate=(2|Quarantine)"),
+        ($value -match "High=(3|Remove)"),
         ($value -match "Severe=(3|Remove)")
+    ) -notcontains $false
 }
 
 if (Test-TaskShouldRun -TaskName "defender-signature-update" -Hours $effectiveSignatureUpdateCooldownHours) {
@@ -780,6 +782,52 @@ if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $effectiveWindo
 else {
     Write-Log "Windows Update immediate ignoree (cooldown actif ${effectiveWindowsUpdateTriggerCooldownHours}h)."
     Show-TaskNotification -TaskName "windows-update-trigger" -Status "Skipped" -Details "Cooldown actif (${effectiveWindowsUpdateTriggerCooldownHours}h)."
+}
+
+Write-Log "Desactivation de fonctions Microsoft additionnelles qui peuvent ralentir le PC."
+Invoke-ComplianceRule -Rule "Widgets et News Feed" -Expected "AllowNewsAndInterests=0" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Dsh" -Name "AllowNewsAndInterests" -ErrorAction Stop).AllowNewsAndInterests
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Dsh" -Name "AllowNewsAndInterests" -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Applications en arriere-plan" -Expected "LetAppsRunInBackground=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsRunInBackground" -ErrorAction Stop).LetAppsRunInBackground
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsRunInBackground" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "GameDVR et capture Xbox" -Expected "AllowGameDVR=0" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -ErrorAction Stop).AllowGameDVR
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Windows Copilot" -Expected "TurnOffWindowsCopilot=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -ErrorAction Stop).TurnOffWindowsCopilot
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Invoke-ComplianceRule -Rule "Delivery Optimization P2P" -Expected "DODownloadMode=0" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Name "DODownloadMode" -ErrorAction Stop).DODownloadMode
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" -Name "DODownloadMode" -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
 }
 
 Write-ComplianceSummary
