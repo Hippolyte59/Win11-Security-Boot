@@ -391,6 +391,24 @@ function Get-LockoutPolicy {
     }
 }
 
+function Get-WinREStatus {
+    $output = & reagentc.exe /info 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "reagentc /info a echoue (code=$LASTEXITCODE)."
+    }
+
+    $text = ($output | Out-String)
+    if ($text -match "Windows RE status:\s*(Enabled|Disabled)") {
+        return $Matches[1]
+    }
+
+    if ($text -match "Windows RE.*:\s*(Enabled|Disabled|Active|Desactive|Desactivee)") {
+        return $Matches[1]
+    }
+
+    return "Unknown"
+}
+
 function Write-ComplianceSummary {
     $okCount = ($complianceResults | Where-Object { $_.Status -eq "OK" }).Count
     $koCount = ($complianceResults | Where-Object { $_.Status -eq "KO" }).Count
@@ -604,6 +622,19 @@ Invoke-ComplianceRule -Rule "PowerShell v2" -Expected "State=Disabled" -GetValue
 } -IsCompliant {
     param($value)
     return ([string]$value -eq "Disabled") -or ([string]$value -eq "DisabledWithPayloadRemoved")
+}
+
+Write-Log "Desactivation Windows Recovery Environment (WinRE)."
+Invoke-ComplianceRule -Rule "Windows RE" -Expected "Status=Disabled" -GetValue {
+    "Status=$(Get-WinREStatus)"
+} -Apply {
+    & reagentc.exe /disable | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "reagentc /disable a echoue (code=$LASTEXITCODE)."
+    }
+} -IsCompliant {
+    param($value)
+    return ($value -match "Status=(Disabled|Desactive|Desactivee)")
 }
 
 Write-Log "Configuration Windows Update automatique (telechargement + installation)."

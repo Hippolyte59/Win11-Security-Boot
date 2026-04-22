@@ -48,6 +48,7 @@ Le script applique des regles de hardening, genere un rapport de conformite, pui
 - Activation SmartScreen systeme (mode Block).
 - Durcissement WDigest et LSASS (RunAsPPL).
 - Desactivation PowerShell v2.
+- Desactivation de Windows Recovery Environment (WinRE).
 - Configuration Windows Update + declenchement asynchrone (avec cooldown).
 - Rapport de conformite par regle (OK/KO, before/after).
 - Notifications Windows differenciees selon la tache et le statut.
@@ -68,6 +69,7 @@ Regles principales auditees:
 - WDigest: UseLogonCredential=0.
 - LSASS: RunAsPPL=1.
 - PowerShell v2: Disabled ou DisabledWithPayloadRemoved.
+- Windows RE: Status=Disabled.
 - Windows Update policy: AUOptions=4, ScheduledInstallDay=0, ScheduledInstallTime, NoAutoRebootWithLoggedOnUsers=1.
 
 ### Structure des fichiers (FR)
@@ -168,6 +170,7 @@ Cette commande retire la tache planifiee uniquement. Les reglages deja appliques
 
 - Certaines regles peuvent etre ecrasees par des politiques entreprise (GPO/Intune).
 - La protection LSASS (RunAsPPL) peut necessiter un redemarrage pour effet complet.
+- WinRE est desactive par ce script: sans media de recuperation externe, certaines options de depannage avance ne seront plus disponibles.
 
 ---
 
@@ -204,6 +207,7 @@ It applies baseline security controls, writes compliance output, and launches he
 - Enables system SmartScreen in Block mode.
 - Hardens WDigest and LSASS (RunAsPPL).
 - Disables PowerShell v2.
+- Disables Windows Recovery Environment (WinRE).
 - Configures Windows Update policy and asynchronous trigger with cooldown.
 - Produces per-rule compliance logs (OK/KO, before/after).
 - Sends task-specific Windows notifications with different icons/messages.
@@ -224,6 +228,7 @@ Main audited rules:
 - WDigest: UseLogonCredential=0.
 - LSASS: RunAsPPL=1.
 - PowerShell v2: Disabled or DisabledWithPayloadRemoved.
+- Windows RE: Status=Disabled.
 - Windows Update policy keys.
 
 ### File Layout (EN)
@@ -324,5 +329,6 @@ This only removes the scheduled task. Applied security settings remain on the ma
 
 - Enterprise policies (GPO/Intune) can override some settings.
 - LSASS protection (RunAsPPL) may require reboot for full effect.
+- WinRE is disabled by this script: without external recovery media, some advanced troubleshooting options may no longer be available.
 
 
