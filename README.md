@@ -2,6 +2,13 @@
 
 Automatic Windows 11 hardening at startup with PowerShell, no external dependencies.
 
+[![Platform](https://img.shields.io/badge/Platform-Windows%2011-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows/windows-11)
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/powershell/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Startup Task](https://img.shields.io/badge/Startup-Task%20Scheduler-blue)](install-startup-task.ps1)
+[![Defender](https://img.shields.io/badge/Security-Microsoft%20Defender-success)](win11-startup-security.ps1)
+[![Status](https://img.shields.io/badge/Status-Active-brightgreen)](.)
+
 Language:
 - [Francais](#francais)
 - [English](#english)
