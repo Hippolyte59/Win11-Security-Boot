@@ -52,6 +52,8 @@ Depuis cette version, le script adapte automatiquement ses cooldowns selon la RA
 - Desactivation PowerShell v2.
 - Desactivation de Windows Recovery Environment (WinRE).
 - Configuration Windows Update + declenchement asynchrone (avec cooldown).
+- Reduction de la collecte Microsoft (telemetrie, historique d'activite, recherche web cloud, Advertising ID, contenus personnalises).
+- Desactivation de fonctions souvent inutiles et couteuses (Widgets/News Feed, apps en arriere-plan, GameDVR/Xbox capture, Copilot, Delivery Optimization P2P).
 - Rapport de conformite par regle (OK/KO, before/after).
 - Notifications Windows differenciees selon la tache et le statut.
 - Profil performance automatique (Auto/Low/Balanced/High) selon RAM/CPU.
@@ -75,6 +77,12 @@ Regles principales auditees:
 - PowerShell v2: Disabled ou DisabledWithPayloadRemoved.
 - Windows RE: Status=Disabled.
 - Windows Update policy: AUOptions=4, ScheduledInstallDay=0, ScheduledInstallTime, NoAutoRebootWithLoggedOnUsers=1.
+- Telemetry policy: AllowTelemetry=0, DoNotShowFeedbackNotifications=1.
+- Advertising ID policy: DisabledByGroupPolicy=1.
+- Cloud content policy: DisableWindowsConsumerFeatures=1, DisableTailoredExperiencesWithDiagnosticData=1, DisableSoftLanding=1.
+- Activity history policy: EnableActivityFeed=0, PublishUserActivities=0, UploadUserActivities=0.
+- Web search privacy policy: AllowCortana=0, DisableWebSearch=1, ConnectedSearchUseWeb=0, ConnectedSearchUseWebOverMeteredConnections=0.
+- Debloat policies: AllowNewsAndInterests=0, LetAppsRunInBackground=2, AllowGameDVR=0, TurnOffWindowsCopilot=1, DODownloadMode=0.
 
 ### Structure des fichiers (FR)
 
@@ -137,18 +145,18 @@ Get-ChildItem "C:\logs\Win11SecurityBoot" |
 ### Mode performance anti-lag (FR)
 
 Le script detecte automatiquement la machine:
-- `Low` (cible 8 GB): RAM <= 8.5 GB, ou CPU <= 4 threads.
-- `Balanced` (cible 16 GB): RAM <= 16.5 GB, ou CPU <= 8 threads.
-- `High` (cible 32 GB+): RAM > 16.5 GB et CPU > 8 threads.
+- `Low`: RAM <= 8 GB, ou CPU <= 4 threads.
+- `Balanced`: RAM <= 16 GB, ou CPU <= 8 threads.
+- `High`: au-dela.
 
 Effets:
 - Cooldowns augmentes automatiquement sur profils modestes.
 - Taches lourdes (scan complet Defender, Windows Update, signatures) lancees avec priorite reduite.
 
 Exemple de comportement par classe:
-- `Low` (8 GB): signatures ~18h, Windows Update ~24h, full scan ~504h minimum.
-- `Balanced` (16 GB): signatures ~8h, Windows Update ~12h, full scan ~240h minimum.
-- `High` (32 GB+): signatures ~4h, Windows Update ~6h, full scan ~168h minimum.
+- `Low`: signatures >= 12h, Windows Update >= 24h, full scan >= 336h.
+- `Balanced`: signatures >= 6h, Windows Update >= 12h, full scan >= 168h.
+- `High`: utilise les valeurs demandees (parametres du script).
 
 Si besoin, vous pouvez forcer un profil:
 
@@ -244,6 +252,8 @@ This version also auto-tunes cooldowns from RAM/CPU so lower-end PCs get less st
 - Disables PowerShell v2.
 - Disables Windows Recovery Environment (WinRE).
 - Configures Windows Update policy and asynchronous trigger with cooldown.
+- Reduces Microsoft tracking footprint (telemetry, activity history, cloud/web search integration, Advertising ID, tailored experiences).
+- Disables commonly unnecessary and heavy features (Widgets/News Feed, background apps, GameDVR/Xbox capture, Copilot, Delivery Optimization P2P).
 - Produces per-rule compliance logs (OK/KO, before/after).
 - Sends task-specific Windows notifications with different icons/messages.
 - Hardware-aware performance profile (Auto/Low/Balanced/High).
@@ -267,6 +277,11 @@ Main audited rules:
 - PowerShell v2: Disabled or DisabledWithPayloadRemoved.
 - Windows RE: Status=Disabled.
 - Windows Update policy keys.
+- Telemetry policy keys.
+- Advertising ID policy key.
+- Cloud content and activity history privacy keys.
+- Web search privacy keys.
+- Debloat policy keys (Widgets, background apps, GameDVR, Copilot, Delivery Optimization).
 
 ### File Layout (EN)
 
@@ -329,18 +344,18 @@ Get-ChildItem "C:\logs\Win11SecurityBoot" |
 ### Performance anti-lag mode (EN)
 
 The script auto-detects hardware:
-- `Low` (8 GB target): RAM <= 8.5 GB, or CPU <= 4 logical threads.
-- `Balanced` (16 GB target): RAM <= 16.5 GB, or CPU <= 8 logical threads.
-- `High` (32 GB+ target): RAM > 16.5 GB and CPU > 8 logical threads.
+- `Low`: RAM <= 8 GB, or CPU <= 4 logical threads.
+- `Balanced`: RAM <= 16 GB, or CPU <= 8 logical threads.
+- `High`: above that.
 
 Effects:
 - Cooldowns are increased automatically on lower-end profiles.
 - Heavy background tasks run with reduced priority.
 
 Typical class behavior:
-- `Low` (8 GB): signatures ~18h, Windows Update ~24h, full scan ~504h minimum.
-- `Balanced` (16 GB): signatures ~8h, Windows Update ~12h, full scan ~240h minimum.
-- `High` (32 GB+): signatures ~4h, Windows Update ~6h, full scan ~168h minimum.
+- `Low`: signatures >= 12h, Windows Update >= 24h, full scan >= 336h.
+- `Balanced`: signatures >= 6h, Windows Update >= 12h, full scan >= 168h.
+- `High`: uses requested values from script parameters.
 
 To force a profile manually:
 
