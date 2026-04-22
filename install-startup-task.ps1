@@ -17,13 +17,14 @@ if (-not (Test-Admin)) {
 
 $taskName = "Win11SecurityBoot"
 $scriptPath = Join-Path $PSScriptRoot "win11-startup-security.ps1"
+$powerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 if (-not (Test-Path $scriptPath)) {
     Write-Host "Script introuvable: $scriptPath"
     exit 1
 }
 
-$action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+$action = New-ScheduledTaskAction -Execute $powerShellExe -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest

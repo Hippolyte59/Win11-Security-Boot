@@ -51,6 +51,117 @@ function Write-Log {
     $line | Tee-Object -FilePath $logFile -Append
 }
 
+$script:NotificationSupported = $false
+$script:NotificationReason = ""
+
+function Initialize-NotificationSupport {
+    if (-not [Environment]::UserInteractive) {
+        $script:NotificationSupported = $false
+        $script:NotificationReason = "Session non interactive (execution en compte service/systeme)."
+        return
+    }
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $script:NotificationSupported = $true
+        $script:NotificationReason = ""
+    }
+    catch {
+        $script:NotificationSupported = $false
+        $script:NotificationReason = "Assemblies notification indisponibles: $($_.Exception.Message)"
+    }
+}
+
+function Get-NotificationTemplate {
+    param([string]$TaskName)
+
+    switch ($TaskName) {
+        "defender-signature-update" {
+            return [PSCustomObject]@{
+                Title = "Defender - Signatures"
+                Message = "Mise a jour des signatures antivirus lancee."
+                Icon = [System.Drawing.SystemIcons]::Information
+            }
+        }
+        "defender-full-scan" {
+            return [PSCustomObject]@{
+                Title = "Defender - Scan complet"
+                Message = "Scan antivirus complet demarre."
+                Icon = [System.Drawing.SystemIcons]::Warning
+            }
+        }
+        "windows-update-trigger" {
+            return [PSCustomObject]@{
+                Title = "Windows Update"
+                Message = "Recherche/telechargement/installation des mises a jour declenches."
+                Icon = [System.Drawing.SystemIcons]::Application
+            }
+        }
+        "compliance-summary" {
+            return [PSCustomObject]@{
+                Title = "Securisation Windows"
+                Message = "Rapport de conformite genere."
+                Icon = [System.Drawing.SystemIcons]::Asterisk
+            }
+        }
+        default {
+            return [PSCustomObject]@{
+                Title = "Securisation Windows"
+                Message = "Tache de securite executee."
+                Icon = [System.Drawing.SystemIcons]::Information
+            }
+        }
+    }
+}
+
+function Show-TaskNotification {
+    param(
+        [string]$TaskName,
+        [ValidateSet("Success", "Skipped", "Warning", "Error")]
+        [string]$Status = "Success",
+        [string]$Details = ""
+    )
+
+    if (-not $script:NotificationSupported) {
+        if (-not [string]::IsNullOrWhiteSpace($script:NotificationReason)) {
+            Write-Log "Notification non affichee pour '$TaskName': $script:NotificationReason"
+        }
+        return
+    }
+
+    $template = Get-NotificationTemplate -TaskName $TaskName
+    $message = $template.Message
+    if (-not [string]::IsNullOrWhiteSpace($Details)) {
+        $message = "$message $Details"
+    }
+
+    $balloonIcon = [System.Windows.Forms.ToolTipIcon]::Info
+    if ($Status -eq "Error") {
+        $balloonIcon = [System.Windows.Forms.ToolTipIcon]::Error
+    }
+    elseif (($Status -eq "Warning") -or ($Status -eq "Skipped")) {
+        $balloonIcon = [System.Windows.Forms.ToolTipIcon]::Warning
+    }
+
+    $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
+    try {
+        $notifyIcon.Icon = $template.Icon
+        $notifyIcon.Visible = $true
+        $notifyIcon.BalloonTipIcon = $balloonIcon
+        $notifyIcon.BalloonTipTitle = $template.Title
+        $notifyIcon.BalloonTipText = $message
+        $notifyIcon.ShowBalloonTip(10000)
+        Write-Log "Notification affichee: task='$TaskName' status='$Status' message='$message'"
+    }
+    catch {
+        Write-Log "Erreur notification '$TaskName': $($_.Exception.Message)"
+    }
+    finally {
+        $notifyIcon.Dispose()
+    }
+}
+
 function Convert-ToAuditString {
     param([object]$Value)
 
@@ -244,12 +355,23 @@ function Save-TaskRunState {
 function Start-DetachedPowerShell {
     param([string]$Command)
 
-    Start-Process -FilePath "PowerShell.exe" -ArgumentList @(
+    $powerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+
+    Start-Process -FilePath $powerShellExe -ArgumentList @(
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
         "-WindowStyle", "Hidden",
         "-Command", $Command
     ) -WindowStyle Hidden | Out-Null
+}
+
+function Get-BuiltInGuestName {
+    $guest = Get-CimInstance -ClassName Win32_UserAccount -Filter "LocalAccount=True AND SID LIKE '%-501'" | Select-Object -First 1
+    if ($null -eq $guest) {
+        throw "Compte Invite integre (SID finissant par -501) introuvable."
+    }
+
+    return $guest.Name
 }
 
 function Get-LockoutPolicy {
@@ -283,8 +405,17 @@ function Write-ComplianceSummary {
         Add-Content -Path $complianceFile -Value $line -Encoding ASCII
     }
 
+    if ($koCount -gt 0) {
+        Show-TaskNotification -TaskName "compliance-summary" -Status "Warning" -Details "Resultat: OK=$okCount KO=$koCount"
+    }
+    else {
+        Show-TaskNotification -TaskName "compliance-summary" -Status "Success" -Details "Resultat: OK=$okCount KO=$koCount"
+    }
+
     Write-Log "Rapport de conformite ecrit: $complianceFile"
 }
+
+Initialize-NotificationSupport
 
 Write-Log "Demarrage du script de securisation."
 
@@ -346,13 +477,16 @@ if (Test-TaskShouldRun -TaskName "defender-signature-update" -Hours $SignatureUp
         Write-Log "Lancement asynchrone de la mise a jour des signatures Defender."
         Start-DetachedPowerShell -Command "Update-MpSignature | Out-Null"
         Save-TaskRunState -TaskName "defender-signature-update"
+        Show-TaskNotification -TaskName "defender-signature-update" -Status "Success"
     }
     catch {
         Write-Log "Erreur lancement update signatures: $($_.Exception.Message)"
+        Show-TaskNotification -TaskName "defender-signature-update" -Status "Error" -Details $_.Exception.Message
     }
 }
 else {
     Write-Log "Update signatures ignoree (cooldown actif ${SignatureUpdateCooldownHours}h)."
+    Show-TaskNotification -TaskName "defender-signature-update" -Status "Skipped" -Details "Cooldown actif (${SignatureUpdateCooldownHours}h)."
 }
 
 if (Test-TaskShouldRun -TaskName "defender-full-scan" -Hours $FullScanCooldownHours) {
@@ -360,13 +494,16 @@ if (Test-TaskShouldRun -TaskName "defender-full-scan" -Hours $FullScanCooldownHo
         Write-Log "Lancement asynchrone du scan complet Defender (sans blocage du demarrage)."
         Start-DetachedPowerShell -Command "Start-MpScan -ScanType FullScan"
         Save-TaskRunState -TaskName "defender-full-scan"
+        Show-TaskNotification -TaskName "defender-full-scan" -Status "Success"
     }
     catch {
         Write-Log "Erreur lancement scan complet: $($_.Exception.Message)"
+        Show-TaskNotification -TaskName "defender-full-scan" -Status "Error" -Details $_.Exception.Message
     }
 }
 else {
     Write-Log "Scan complet ignore (cooldown actif ${FullScanCooldownHours}h)."
+    Show-TaskNotification -TaskName "defender-full-scan" -Status "Skipped" -Details "Cooldown actif (${FullScanCooldownHours}h)."
 }
 
 Write-Log "Desactivation SMBv1 cote serveur (durcissement reseau)."
@@ -413,9 +550,14 @@ Invoke-ComplianceRule -Rule "AutoRun" -Expected "NoDriveTypeAutoRun=255" -GetVal
 
 Write-Log "Desactivation du compte Invite local."
 Invoke-ComplianceRule -Rule "Compte Invite" -Expected "Enabled=False" -GetValue {
-    (Get-LocalUser -Name "Guest" -ErrorAction Stop).Enabled
+    $guestName = Get-BuiltInGuestName
+    (Get-LocalUser -Name $guestName -ErrorAction Stop).Enabled
 } -Apply {
-    & net.exe user Guest /active:no | Out-Null
+    $guestName = Get-BuiltInGuestName
+    & net.exe user $guestName /active:no | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Echec net user pour le compte Invite integre '$guestName' (code=$LASTEXITCODE)."
+    }
 } -IsCompliant {
     param($value)
     return [string]$value -eq "False"
@@ -491,17 +633,21 @@ if (Test-TaskShouldRun -TaskName "windows-update-trigger" -Hours $WindowsUpdateT
             Start-DetachedPowerShell -Command $wuCommand
             Save-TaskRunState -TaskName "windows-update-trigger"
             Write-Log "Windows Update lance via UsoClient."
+            Show-TaskNotification -TaskName "windows-update-trigger" -Status "Success"
         }
         else {
             Write-Log "UsoClient.exe introuvable: declenchement immediat ignore."
+            Show-TaskNotification -TaskName "windows-update-trigger" -Status "Warning" -Details "UsoClient.exe introuvable."
         }
     }
     catch {
         Write-Log "Erreur lancement Windows Update: $($_.Exception.Message)"
+        Show-TaskNotification -TaskName "windows-update-trigger" -Status "Error" -Details $_.Exception.Message
     }
 }
 else {
     Write-Log "Windows Update immediate ignoree (cooldown actif ${WindowsUpdateTriggerCooldownHours}h)."
+    Show-TaskNotification -TaskName "windows-update-trigger" -Status "Skipped" -Details "Cooldown actif (${WindowsUpdateTriggerCooldownHours}h)."
 }
 
 Write-ComplianceSummary
