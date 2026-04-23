@@ -1047,6 +1047,45 @@ Invoke-ComplianceRule -Rule "Blocage domaines pub Microsoft/MSN (hosts)" -Expect
     return $false
 }
 
+Write-Log "Blocage DNS des domaines publicitaires via NRPT (Name Resolution Policy Table)."
+$nrptBase = "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DnsPolicyConfig"
+$nrptDomains = $adDomains
+
+Invoke-ComplianceRule -Rule "Blocage DNS NRPT domaines pub" -Expected "Tous les domaines bloques dans NRPT" -GetValue {
+    $blockedCount = 0
+    foreach ($domain in $nrptDomains) {
+        $keyName = "Win11SB_$($domain -replace '\.','_')"
+        $keyPath = Join-Path $nrptBase $keyName
+        if (Test-Path $keyPath) {
+            $cfg = Get-ItemProperty -Path $keyPath -ErrorAction SilentlyContinue
+            if ($cfg -and $cfg.ConfigOptions -eq 8) {
+                $blockedCount++
+            }
+        }
+    }
+    return "nrpt_bloques=$blockedCount/total=$($nrptDomains.Count)"
+} -Apply {
+    New-Item -Path $nrptBase -Force | Out-Null
+    foreach ($domain in $nrptDomains) {
+        $keyName = "Win11SB_$($domain -replace '\.','_')"
+        $keyPath = Join-Path $nrptBase $keyName
+        New-Item -Path $keyPath -Force | Out-Null
+        Set-ItemProperty -Path $keyPath -Name "Version"             -Type DWord  -Value 2
+        Set-ItemProperty -Path $keyPath -Name "ConfigOptions"       -Type DWord  -Value 8
+        Set-ItemProperty -Path $keyPath -Name "Name"                -Type MultiString -Value @(".$domain")
+        Set-ItemProperty -Path $keyPath -Name "GenericDNSServers"   -Type String -Value ""
+        Set-ItemProperty -Path $keyPath -Name "IPSECCARestriction"  -Type String -Value ""
+        Set-ItemProperty -Path $keyPath -Name "Comment"             -Type String -Value "Win11SecurityBoot - blocked ad domain"
+    }
+    ipconfig /flushdns | Out-Null
+} -IsCompliant {
+    param($value)
+    if ($value -match "nrpt_bloques=(\d+)/total=(\d+)") {
+        return [int]$Matches[1] -eq [int]$Matches[2]
+    }
+    return $false
+}
+
 Write-ComplianceSummary -PreviousResults $previousResults
 $complianceResults | Export-Clixml -Path $previousResultsFile -Force
 Save-RunState
