@@ -1289,6 +1289,260 @@ Invoke-ComplianceRule -Rule "Blocage DNS NRPT domaines pub" -Expected "Tous les 
     return $false
 }
 
+Write-Log "Durcissement vie privee avance: diagnostics, feedback et partage de donnees."
+
+Invoke-ComplianceRule -Rule "Feedback Windows desactive" -Expected "NumberOfSIUFInPeriod=0" -GetValue {
+    (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -ErrorAction Stop).NumberOfSIUFInPeriod
+} -Apply {
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -Type DWord -Value 0
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" -Name "PeriodInNanoSeconds" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Rapport erreurs Windows desactive" -Expected "Disabled=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" -Name "Disabled" -ErrorAction Stop).Disabled
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" -Name "Disabled" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" -Name "DontSendAdditionalData" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" -Name "LoggingDisabled" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Invoke-ComplianceRule -Rule "Programme amelioration experience (CEIP) desactive" -Expected "CEIPEnable=0" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows" -Name "CEIPEnable" -ErrorAction Stop).CEIPEnable
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\SQMClient\Windows" -Name "CEIPEnable" -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Compatibilite applications telemetrie desactivee" -Expected "AITEnable=0" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat" -Name "AITEnable" -ErrorAction Stop).AITEnable
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat" -Name "AITEnable" -Value 0
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat" -Name "DisableInventory" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat" -Name "DisablePCA" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat" -Name "DisableUAR" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Write-Log "Durcissement vie privee: blocage acces camera, micro, localisation, contacts."
+
+Invoke-ComplianceRule -Rule "Acces camera applications UWP bloque" -Expected "LetAppsAccessCamera=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessCamera" -ErrorAction Stop).LetAppsAccessCamera
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessCamera" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces microphone applications UWP bloque" -Expected "LetAppsAccessMicrophone=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessMicrophone" -ErrorAction Stop).LetAppsAccessMicrophone
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessMicrophone" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces localisation applications UWP bloque" -Expected "LetAppsAccessLocation=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessLocation" -ErrorAction Stop).LetAppsAccessLocation
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessLocation" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces contacts applications UWP bloque" -Expected "LetAppsAccessContacts=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessContacts" -ErrorAction Stop).LetAppsAccessContacts
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessContacts" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces calendrier applications UWP bloque" -Expected "LetAppsAccessCalendar=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessCalendar" -ErrorAction Stop).LetAppsAccessCalendar
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessCalendar" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces messages SMS applications UWP bloque" -Expected "LetAppsAccessMessaging=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessMessaging" -ErrorAction Stop).LetAppsAccessMessaging
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessMessaging" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Acces notifications applications UWP bloque" -Expected "LetAppsAccessNotifications=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessNotifications" -ErrorAction Stop).LetAppsAccessNotifications
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessNotifications" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Localisation systeme desactivee" -Expected "DisableLocation=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -ErrorAction Stop).DisableLocation
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocationScripting" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableSensors" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Write-Log "Durcissement vie privee: desactivation taches planifiees de telemetrie CEIP."
+
+$telemetryTasks = @(
+    "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+    "\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+    "\Microsoft\Windows\Application Experience\StartupAppTask",
+    "\Microsoft\Windows\Autochk\Proxy",
+    "\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+    "\Microsoft\Windows\Customer Experience Improvement Program\KernelCeipTask",
+    "\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+    "\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+    "\Microsoft\Windows\Feedback\Siuf\DmClient",
+    "\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+    "\Microsoft\Windows\Maps\MapsToastTask",
+    "\Microsoft\Windows\Maps\MapsUpdateTask",
+    "\Microsoft\Windows\NetTrace\GatherNetworkInfo",
+    "\Microsoft\Windows\SettingSync\BackgroundUploadTask",
+    "\Microsoft\Windows\SettingSync\NetworkStateChangeTask",
+    "\Microsoft\Windows\Windows Error Reporting\QueueReporting"
+)
+
+Invoke-ComplianceRule -Rule "Taches telemetrie CEIP desactivees" -Expected "taches_actives=0" -GetValue {
+    $enabled = 0
+    foreach ($task in $telemetryTasks) {
+        $t = Get-ScheduledTask -TaskPath (Split-Path $task -Parent) -TaskName (Split-Path $task -Leaf) -ErrorAction SilentlyContinue
+        if ($t -and $t.State -ne "Disabled") { $enabled++ }
+    }
+    return "taches_actives=$enabled"
+} -Apply {
+    foreach ($task in $telemetryTasks) {
+        $tp = Split-Path $task -Parent
+        $tn = Split-Path $task -Leaf
+        $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue
+        if ($t) { Disable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue | Out-Null }
+    }
+} -IsCompliant {
+    param($value)
+    return $value -match "taches_actives=0"
+}
+
+Write-Log "Durcissement vie privee: desactivation services de collecte de donnees."
+
+Invoke-ComplianceRule -Rule "Service DiagTrack (telemetrie) desactive" -Expected "Disabled" -GetValue {
+    (Get-Service -Name "DiagTrack" -ErrorAction Stop).StartType
+} -Apply {
+    Stop-Service -Name "DiagTrack" -Force -ErrorAction SilentlyContinue
+    Set-Service -Name "DiagTrack" -StartupType Disabled -ErrorAction SilentlyContinue
+} -IsCompliant {
+    param($value)
+    return ([string]$value -eq "Disabled") -or ([string]$value -eq "4")
+}
+
+Invoke-ComplianceRule -Rule "Service dmwappushservice desactive" -Expected "Disabled" -GetValue {
+    (Get-Service -Name "dmwappushservice" -ErrorAction Stop).StartType
+} -Apply {
+    Stop-Service -Name "dmwappushservice" -Force -ErrorAction SilentlyContinue
+    Set-Service -Name "dmwappushservice" -StartupType Disabled -ErrorAction SilentlyContinue
+} -IsCompliant {
+    param($value)
+    return ([string]$value -eq "Disabled") -or ([string]$value -eq "4")
+}
+
+Write-Log "Durcissement vie privee: Spotlight, sync cloud, saisie, OneDrive."
+
+Invoke-ComplianceRule -Rule "Windows Spotlight desactive" -Expected "NoLockScreenCamera=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreenCamera" -ErrorAction Stop).NoLockScreenCamera
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreenCamera" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" -Name "NoLockScreenSlideshow" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsSpotlightFeatures" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsSpotlightOnActionCenter" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsSpotlightOnSettings" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsSpotlightWindowsWelcomeExperience" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Invoke-ComplianceRule -Rule "Synchronisation parametres cloud desactivee" -Expected "DisableSettingSync=2" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableSettingSync" -ErrorAction Stop).DisableSettingSync
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableSettingSync" -Value 2
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableSettingSyncUserOverride" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableApplicationSettingSync" -Value 2
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableCredentialsSettingSync" -Value 2
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisableDesktopThemeSettingSync" -Value 2
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SettingSync" -Name "DisablePersonalizationSettingSync" -Value 2
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 2
+}
+
+Invoke-ComplianceRule -Rule "Saisie manuscrite et reconnaissance vocale" -Expected "RestrictImplicitInkCollection=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization" -Name "RestrictImplicitInkCollection" -ErrorAction Stop).RestrictImplicitInkCollection
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization" -Name "RestrictImplicitInkCollection" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\InputPersonalization" -Name "RestrictImplicitTextCollection" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports" -Name "PreventHandwritingErrorReports" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\TabletPC" -Name "PreventHandwritingDataSharing" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
+Invoke-ComplianceRule -Rule "Publicite par ID materiel desactivee" -Expected "Enabled=0" -GetValue {
+    (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -ErrorAction Stop).Enabled
+} -Apply {
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Suivi lancement applications desactive" -Expected "Start_TrackProgs=0" -GetValue {
+    (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackProgs" -ErrorAction Stop).Start_TrackProgs
+} -Apply {
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Start_TrackProgs" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "OneDrive desactive (politique)" -Expected "DisableFileSyncNGSC=1" -GetValue {
+    (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive" -Name "DisableFileSyncNGSC" -ErrorAction Stop).DisableFileSyncNGSC
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive" -Name "DisableFileSyncNGSC" -Value 1
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive" -Name "DisableLibrariesDefaultSaveToOneDrive" -Value 1
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 1
+}
+
 Write-ComplianceSummary -PreviousResults $previousResults
 $complianceResults | Export-Clixml -Path $previousResultsFile -Force
 Save-RunState
