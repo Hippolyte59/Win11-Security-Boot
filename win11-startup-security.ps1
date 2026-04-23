@@ -1097,7 +1097,6 @@ $adDomains = @(
     "blismedia.com",
     "brealtime.com",
     "brightroll.com",
-    "casalemedia.com",
     "cmcore.com",
     "contextweb.com",
     "ads.contextweb.com",
@@ -1231,6 +1230,8 @@ $adDomains = @(
     "yume.com"
 )
 
+$adDomains = $adDomains | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique
+
 Invoke-ComplianceRule -Rule "Blocage domaines pub Microsoft/MSN (hosts)" -Expected "Tous les domaines bloques dans hosts" -GetValue {
     if (-not (Test-Path $hostsPath)) {
         return "hosts=introuvable"
@@ -1247,8 +1248,7 @@ Invoke-ComplianceRule -Rule "Blocage domaines pub Microsoft/MSN (hosts)" -Expect
     } else {
         @()
     }
-    $marker = "Win11SecurityBoot Ad domains"
-    $newEntries = @($marker)
+    $newEntries = @()
     foreach ($domain in $adDomains) {
         $alreadyPresent = $hostsContent | Where-Object { $_ -match "^\s*0\.0\.0\.0\s+$([regex]::Escape($domain))" }
         if (-not $alreadyPresent) {
@@ -1450,14 +1450,20 @@ $telemetryTasks = @(
 Invoke-ComplianceRule -Rule "Taches telemetrie CEIP desactivees" -Expected "taches_actives=0" -GetValue {
     $enabled = 0
     foreach ($task in $telemetryTasks) {
-        $t = Get-ScheduledTask -TaskPath (Split-Path $task -Parent) -TaskName (Split-Path $task -Leaf) -ErrorAction SilentlyContinue
+        $lastSep = $task.LastIndexOf("\")
+        if ($lastSep -le 0) { continue }
+        $tp = $task.Substring(0, $lastSep + 1)
+        $tn = $task.Substring($lastSep + 1)
+        $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue
         if ($t -and $t.State -ne "Disabled") { $enabled++ }
     }
     return "taches_actives=$enabled"
 } -Apply {
     foreach ($task in $telemetryTasks) {
-        $tp = Split-Path $task -Parent
-        $tn = Split-Path $task -Leaf
+        $lastSep = $task.LastIndexOf("\")
+        if ($lastSep -le 0) { continue }
+        $tp = $task.Substring(0, $lastSep + 1)
+        $tn = $task.Substring($lastSep + 1)
         $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue
         if ($t) { Disable-ScheduledTask -TaskPath $tp -TaskName $tn -ErrorAction SilentlyContinue | Out-Null }
     }
