@@ -877,6 +877,22 @@ Invoke-ComplianceRule -Rule "Widgets et News Feed" -Expected "AllowNewsAndIntere
     return [int]$value -eq 0
 }
 
+Invoke-ComplianceRule -Rule "Metadonnees MSN Widgets desactivees" -Expected "DisableWidgetsBoard=1;TaskbarDa=0;ShellFeedsTaskbarViewMode=2" -GetValue {
+    $dsh = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Dsh" -ErrorAction Stop
+    $adv = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -ErrorAction Stop
+    $feeds = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds" -ErrorAction Stop
+    "DisableWidgetsBoard=$($dsh.DisableWidgetsBoard);TaskbarDa=$($adv.TaskbarDa);ShellFeedsTaskbarViewMode=$($feeds.ShellFeedsTaskbarViewMode)"
+} -Apply {
+    Set-RegistryDword -Path "HKLM:\SOFTWARE\Policies\Microsoft\Dsh" -Name "DisableWidgetsBoard" -Value 1
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarDa" -Type DWord -Value 0
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Type DWord -Value 2
+} -IsCompliant {
+    param($value)
+    return ($value -match "DisableWidgetsBoard=1") -and ($value -match "TaskbarDa=0") -and ($value -match "ShellFeedsTaskbarViewMode=2")
+}
+
 Invoke-ComplianceRule -Rule "Applications en arriere-plan" -Expected "LetAppsRunInBackground=2" -GetValue {
     (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsRunInBackground" -ErrorAction Stop).LetAppsRunInBackground
 } -Apply {
@@ -975,10 +991,13 @@ Invoke-ComplianceRule -Rule "Recherche cloud Microsoft desactivee" -Expected "Al
 Write-Log "Blocage des domaines publicitaires (Microsoft, Google, Meta, trackers) via le fichier hosts."
 $hostsPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
 $adDomains = @(
-    # Microsoft / MSN / Telemetrie
     "ads.msn.com",
     "ads1.msn.com",
     "ads2.msn.com",
+    "api.msn.com",
+    "arc.msn.com",
+    "assets.msn.com",
+    "browser.events.data.msn.com",
     "adnexus.net",
     "a-msedge.net",
     "ads.microsoft.com",
@@ -993,8 +1012,10 @@ $adDomains = @(
     "msnbot.msn.com",
     "msntest.serving-sys.com",
     "oca.telemetry.microsoft.com",
+    "ntp.msn.com",
     "rad.msn.com",
     "redir.metaservices.microsoft.com",
+    "img-s-msn-com.akamaized.net",
     "s0.2mdn.net",
     "settings-win.data.microsoft.com",
     "static.2mdn.net",
@@ -1014,7 +1035,6 @@ $adDomains = @(
     "sqm.microsoft.com",
     "sqm.telemetry.microsoft.com",
     "survey.watson.microsoft.com",
-    # Google Ads / DoubleClick / Analytics
     "ad.doubleclick.net",
     "dart.l.doubleclick.net",
     "ad.google.com",
@@ -1040,7 +1060,6 @@ $adDomains = @(
     "www.google-analytics.com",
     "analytics.google.com",
     "stats.g.doubleclick.net",
-    # Meta / Facebook Ads
     "an.facebook.com",
     "connect.facebook.net",
     "web.facebook.com",
@@ -1050,14 +1069,12 @@ $adDomains = @(
     "www.facebook.com.cdn.cloudflare.net",
     "edge-atlas.facebook.com",
     "star.c10r.facebook.com",
-    # Amazon Ads
     "aax.amazon-adsystem.com",
     "c.amazon-adsystem.com",
     "fls-na.amazon.com",
     "mads.amazon-adsystem.com",
     "s.amazon-adsystem.com",
     "z-na.amazon-adsystem.com",
-    # Reseaux publicitaires tiers
     "adserver.adtech.de",
     "adtech.de",
     "adtechus.com",
@@ -1161,7 +1178,6 @@ $adDomains = @(
     "yieldmanager.com",
     "edge.yieldmanager.com",
     "yieldmo.com",
-    # Trackers / Fingerprinting
     "2o7.net",
     "247realmedia.com",
     "realmedia.com",
@@ -1231,7 +1247,7 @@ Invoke-ComplianceRule -Rule "Blocage domaines pub Microsoft/MSN (hosts)" -Expect
     } else {
         @()
     }
-    $marker = "# Win11SecurityBoot - Ad domains"
+    $marker = "Win11SecurityBoot Ad domains"
     $newEntries = @($marker)
     foreach ($domain in $adDomains) {
         $alreadyPresent = $hostsContent | Where-Object { $_ -match "^\s*0\.0\.0\.0\s+$([regex]::Escape($domain))" }
