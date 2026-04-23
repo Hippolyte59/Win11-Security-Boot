@@ -972,6 +972,81 @@ Invoke-ComplianceRule -Rule "Recherche cloud Microsoft desactivee" -Expected "Al
     return [int]$value -eq 0
 }
 
+Write-Log "Blocage des domaines publicitaires Microsoft/MSN via le fichier hosts."
+$hostsPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
+$adDomains = @(
+    "ads.msn.com",
+    "ads1.msn.com",
+    "ads2.msn.com",
+    "adnexus.net",
+    "a-msedge.net",
+    "ad.doubleclick.net",
+    "ads.microsoft.com",
+    "c.msn.com",
+    "c1.microsoft.com",
+    "dart.l.doubleclick.net",
+    "g.msn.com",
+    "go.microsoft.com.nsatc.net",
+    "lb1.www.ms.akadns.net",
+    "live.rads.msn.com",
+    "msads.net",
+    "msftncsi.com",
+    "msnbot.msn.com",
+    "msntest.serving-sys.com",
+    "oca.telemetry.microsoft.com",
+    "rad.msn.com",
+    "redir.metaservices.microsoft.com",
+    "roaming.officeapps.live.com",
+    "s0.2mdn.net",
+    "settings-win.data.microsoft.com",
+    "sO.2mdn.net",
+    "static.2mdn.net",
+    "statsfe2.update.microsoft.com.akadns.net",
+    "telecommand.telemetry.microsoft.com",
+    "telemetry.microsoft.com",
+    "vortex-win.data.microsoft.com",
+    "vortex.data.microsoft.com",
+    "watson.microsoft.com",
+    "watson.ppe.telemetry.microsoft.com",
+    "watson.telemetry.microsoft.com",
+    "www.msn.com.nsatc.net"
+)
+
+Invoke-ComplianceRule -Rule "Blocage domaines pub Microsoft/MSN (hosts)" -Expected "Tous les domaines bloques dans hosts" -GetValue {
+    if (-not (Test-Path $hostsPath)) {
+        return "hosts=introuvable"
+    }
+    $hostsContent = Get-Content -Path $hostsPath -ErrorAction Stop
+    $blocked = ($adDomains | Where-Object {
+        $domain = $_
+        $hostsContent | Where-Object { $_ -match "^\s*0\.0\.0\.0\s+$([regex]::Escape($domain))" }
+    }).Count
+    return "bloques=$blocked/total=$($adDomains.Count)"
+} -Apply {
+    $hostsContent = if (Test-Path $hostsPath) {
+        Get-Content -Path $hostsPath -ErrorAction Stop
+    } else {
+        @()
+    }
+    $marker = "# Win11SecurityBoot - Ad domains"
+    $newEntries = @($marker)
+    foreach ($domain in $adDomains) {
+        $alreadyPresent = $hostsContent | Where-Object { $_ -match "^\s*0\.0\.0\.0\s+$([regex]::Escape($domain))" }
+        if (-not $alreadyPresent) {
+            $newEntries += "0.0.0.0 $domain"
+        }
+    }
+    if ($newEntries.Count -gt 1) {
+        Add-Content -Path $hostsPath -Value ($newEntries -join "`n") -Encoding ASCII
+    }
+} -IsCompliant {
+    param($value)
+    if ($value -match "bloques=(\d+)/total=(\d+)") {
+        return [int]$Matches[1] -eq [int]$Matches[2]
+    }
+    return $false
+}
+
 Write-ComplianceSummary -PreviousResults $previousResults
 $complianceResults | Export-Clixml -Path $previousResultsFile -Force
 Save-RunState
