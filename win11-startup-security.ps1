@@ -501,7 +501,64 @@ function Get-WinREStatus {
     return "Unknown"
 }
 
+function Get-ComplianceSnapshot {
+    param([object[]]$Results)
+    
+    $snapshot = @{}
+    foreach ($result in $Results) {
+        $key = $result.Rule -replace '\s+', '_'
+        $snapshot[$key] = @{
+            Status = $result.Status
+            Before = $result.Before
+            After = $result.After
+        }
+    }
+    return $snapshot
+}
+
+function Compare-ComplianceSnapshots {
+    param(
+        [object[]]$PreviousResults,
+        [object[]]$CurrentResults
+    )
+    
+    $changes = @()
+    $prevMap = @{}
+    if ($PreviousResults) {
+        foreach ($r in $PreviousResults) {
+            $key = $r.Rule -replace '\s+', '_'
+            $prevMap[$key] = $r
+        }
+    }
+    
+    foreach ($curr in $CurrentResults) {
+        $key = $curr.Rule -replace '\s+', '_'
+        if ($prevMap.ContainsKey($key)) {
+            $prev = $prevMap[$key]
+            if ($prev.Status -ne $curr.Status) {
+                $changes += @{
+                    Rule = $curr.Rule
+                    PreviousStatus = $prev.Status
+                    CurrentStatus = $curr.Status
+                    Changed = $true
+                }
+            }
+        }
+        else {
+            $changes += @{
+                Rule = $curr.Rule
+                PreviousStatus = "N/A"
+                CurrentStatus = $curr.Status
+                Changed = $true
+            }
+        }
+    }
+    return $changes
+}
+
 function Write-ComplianceSummary {
+    param([object[]]$PreviousResults = $null)
+    
     $okCount = ($complianceResults | Where-Object { $_.Status -eq "OK" }).Count
     $koCount = ($complianceResults | Where-Object { $_.Status -eq "KO" }).Count
 
@@ -515,6 +572,21 @@ function Write-ComplianceSummary {
         Add-Content -Path $complianceFile -Value $line -Encoding ASCII
     }
 
+    if ($PreviousResults) {
+        Add-Content -Path $complianceFile -Value "" -Encoding ASCII
+        Add-Content -Path $complianceFile -Value "=== HISTORIQUE DES CHANGEMENTS ===" -Encoding ASCII
+        $changes = Compare-ComplianceSnapshots -PreviousResults $PreviousResults -CurrentResults $complianceResults
+        if ($changes.Count -gt 0) {
+            foreach ($change in $changes) {
+                $changeLine = "CHANGEMENT: {0} | Avant={1} Maintenant={2}" -f $change.Rule, $change.PreviousStatus, $change.CurrentStatus
+                Add-Content -Path $complianceFile -Value $changeLine -Encoding ASCII
+            }
+        }
+        else {
+            Add-Content -Path $complianceFile -Value "Aucun changement detected depuis la derniere execution." -Encoding ASCII
+        }
+    }
+
     if ($koCount -gt 0) {
         Show-TaskNotification -TaskName "compliance-summary" -Status "Warning" -Details "Resultat: OK=$okCount KO=$koCount"
     }
@@ -526,6 +598,17 @@ function Write-ComplianceSummary {
 }
 
 Initialize-NotificationSupport
+
+$previousResultsFile = Join-Path $stateDir "compliance-snapshot.xml"
+$previousResults = $null
+if (Test-Path $previousResultsFile) {
+    try {
+        $previousResults = Import-Clixml -Path $previousResultsFile -ErrorAction SilentlyContinue
+    }
+    catch {
+        $previousResults = $null
+    }
+}
 
 $performance = Resolve-PerformanceSettings -RequestedProfile $PerformanceProfile -RequestedCooldownHours $CooldownHours -RequestedSignatureUpdateCooldownHours $SignatureUpdateCooldownHours -RequestedWindowsUpdateTriggerCooldownHours $WindowsUpdateTriggerCooldownHours -RequestedFullScanCooldownHours $FullScanCooldownHours
 $effectiveCooldownHours = $performance.CooldownHours
@@ -830,7 +913,67 @@ Invoke-ComplianceRule -Rule "Delivery Optimization P2P" -Expected "DODownloadMod
     return [int]$value -eq 0
 }
 
-Write-ComplianceSummary
+Write-Log "Desactivation des suggestions et publicites dans le menu Demarrer."
+Invoke-ComplianceRule -Rule "Suggestions menu Demarrer" -Expected "Start_AccountNotifications=0;Start_RecommendedSection=0" -GetValue {
+    $key1 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_AccountNotifications" -ErrorAction Stop
+    $key2 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_RecommendedSection" -ErrorAction Stop
+    "Start_AccountNotifications=$($key1.Start_AccountNotifications);Start_RecommendedSection=$($key2.Start_RecommendedSection)"
+} -Apply {
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_AccountNotifications" -Type DWord -Value 0
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_RecommendedSection" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return ($value -match "Start_AccountNotifications=0") -and ($value -match "Start_RecommendedSection=0")
+}
+
+Invoke-ComplianceRule -Rule "Suggestions applications tierces" -Expected "Start_AppSuggestions=0;SubscribedContentEnabled=0" -GetValue {
+    $key1 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_AppSuggestions" -ErrorAction Stop
+    $key2 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContentEnabled" -ErrorAction Stop
+    "Start_AppSuggestions=$($key1.Start_AppSuggestions);SubscribedContentEnabled=$($key2.SubscribedContentEnabled)"
+} -Apply {
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "Start_AppSuggestions" -Type DWord -Value 0
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" -Name "SubscribedContentEnabled" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return ($value -match "Start_AppSuggestions=0") -and ($value -match "SubscribedContentEnabled=0")
+}
+
+Write-Log "Configuration de Windows Search pour la vie privee (desactivation Bing et collecte)."
+Invoke-ComplianceRule -Rule "Recherche Windows - Bing desactive" -Expected "BingSearchEnabled=0" -GetValue {
+    (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -ErrorAction Stop).BingSearchEnabled
+} -Apply {
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Invoke-ComplianceRule -Rule "Recherche Windows - Historique desactive" -Expected "IsAADAccount=0;HistoryViewEnabled=0" -GetValue {
+    $key1 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "IsAADAccount" -ErrorAction Stop
+    $key2 = Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "HistoryViewEnabled" -ErrorAction Stop
+    "IsAADAccount=$($key1.IsAADAccount);HistoryViewEnabled=$($key2.HistoryViewEnabled)"
+} -Apply {
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "IsAADAccount" -Type DWord -Value 0
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" -Name "HistoryViewEnabled" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return ($value -match "IsAADAccount=0") -and ($value -match "HistoryViewEnabled=0")
+}
+
+Invoke-ComplianceRule -Rule "Recherche cloud Microsoft desactivee" -Expected "AllowCloudSearch=0" -GetValue {
+    (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" -Name "IsCloudSearchEnabled" -ErrorAction Stop).IsCloudSearchEnabled
+} -Apply {
+    New-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" -Force | Out-Null
+    Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\SearchSettings" -Name "IsCloudSearchEnabled" -Type DWord -Value 0
+} -IsCompliant {
+    param($value)
+    return [int]$value -eq 0
+}
+
+Write-ComplianceSummary -PreviousResults $previousResults
+$complianceResults | Export-Clixml -Path $previousResultsFile -Force
 Save-RunState
 Write-Log "Fin du script de securisation."
 exit 0

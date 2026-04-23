@@ -54,6 +54,9 @@ Depuis cette version, le script adapte automatiquement ses cooldowns selon la RA
 - Configuration Windows Update + declenchement asynchrone (avec cooldown).
 - Reduction de la collecte Microsoft (telemetrie, historique d'activite, recherche web cloud, Advertising ID, contenus personnalises).
 - Desactivation de fonctions souvent inutiles et couteuses (Widgets/News Feed, apps en arriere-plan, GameDVR/Xbox capture, Copilot, Delivery Optimization P2P).
+- Blocage des publicites et suggestions dans le menu Demarrer (notifications compte, section recommandee, suggestions d'apps).
+- Configuration de Windows Search privee (desactivation Bing, historique, recherche cloud, compte AAD).
+- Historique de conformite: comparaison avant/apres pour visualiser les changements d'une execution a l'autre.
 - Rapport de conformite par regle (OK/KO, before/after).
 - Notifications Windows differenciees selon la tache et le statut.
 - Profil performance automatique (Auto/Low/Balanced/High) selon RAM/CPU.
@@ -83,6 +86,9 @@ Regles principales auditees:
 - Activity history policy: EnableActivityFeed=0, PublishUserActivities=0, UploadUserActivities=0.
 - Web search privacy policy: AllowCortana=0, DisableWebSearch=1, ConnectedSearchUseWeb=0, ConnectedSearchUseWebOverMeteredConnections=0.
 - Debloat policies: AllowNewsAndInterests=0, LetAppsRunInBackground=2, AllowGameDVR=0, TurnOffWindowsCopilot=1, DODownloadMode=0.
+- Start Menu ads blockage: Start_AccountNotifications=0, Start_RecommendedSection=0, Start_AppSuggestions=0, SubscribedContentEnabled=0.
+- Windows Search privacy: BingSearchEnabled=0, IsAADAccount=0, HistoryViewEnabled=0, IsCloudSearchEnabled=0.
+- Compliance history tracking: before/after snapshots saved for change detection on next run.
 
 ### Structure des fichiers (FR)
 
@@ -254,6 +260,9 @@ This version also auto-tunes cooldowns from RAM/CPU so lower-end PCs get less st
 - Configures Windows Update policy and asynchronous trigger with cooldown.
 - Reduces Microsoft tracking footprint (telemetry, activity history, cloud/web search integration, Advertising ID, tailored experiences).
 - Disables commonly unnecessary and heavy features (Widgets/News Feed, background apps, GameDVR/Xbox capture, Copilot, Delivery Optimization P2P).
+- Blocks Start Menu ads and suggestions (account notifications, recommended section, app suggestions).
+- Configures Windows Search for privacy (disables Bing, history, cloud search, AAD account integration).
+- Tracks compliance history with before/after comparison snapshots to show changes between runs.
 - Produces per-rule compliance logs (OK/KO, before/after).
 - Sends task-specific Windows notifications with different icons/messages.
 - Hardware-aware performance profile (Auto/Low/Balanced/High).
@@ -282,6 +291,9 @@ Main audited rules:
 - Cloud content and activity history privacy keys.
 - Web search privacy keys.
 - Debloat policy keys (Widgets, background apps, GameDVR, Copilot, Delivery Optimization).
+- Start Menu ads blockage keys (account notifications, recommended section, app suggestions, subscribed content).
+- Windows Search privacy keys (Bing search, search history, AAD account, cloud search).
+- Compliance history snapshots (before/after comparison for change tracking).
 
 ### File Layout (EN)
 
